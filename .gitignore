@@ -1,0 +1,42 @@
+# =================================================================
+# 🐳 CONTAINERLAB RUNTIME ARTIFACTS
+# =================================================================
+# Ignore the entire runtime directory generated dynamically on deployment.
+# This contains local SSH keys, auto-generated ansible/nornir inventories, 
+# and transient container runtime state.
+clab-*/
+
+# =================================================================
+# 📊 MACHINE LEARNING DATASETS & CAPTURES
+# =================================================================
+# Do not commit bulky data matrices, data frames, or raw packet captures.
+# These change continuously during simulations and will bloat git history.
+*.csv
+*.pcap
+
+# =================================================================
+# 📝 NETWORK CONTROL PLANE LOGS & COUNTERS
+# =================================================================
+# Exclude active system/routing logs and static text dumps of interface counters.
+*.log
+
+# =================================================================
+# 🐍 PYTHON ENVIRONMENT & RUNTIME CACHE
+# =================================================================
+# Standard python ignore flags for local script testing.
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# =================================================================
+# 💻 SYSTEM & IDE CONFIGURATIONS
+# =================================================================
+.DS_Store
+.idea/
+.vscode/
+*.swp
