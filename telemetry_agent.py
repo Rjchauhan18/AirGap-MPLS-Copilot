@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 # ML Dataset File
-OUTPUT_FILE = "Model/sdwan_telemetry.csv"
+OUTPUT_FILE = "Model/sdwan_telemetry_test.csv"
 
 def run_cmd(container, cmd_list):
     """Helper function to execute commands safely inside Docker containers."""

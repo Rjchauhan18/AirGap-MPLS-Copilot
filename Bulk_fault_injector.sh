@@ -1,5 +1,5 @@
 #!/bin/bash
-LABEL_FILE="Model/ml_ground_truth_labels.csv"
+LABEL_FILE="Model/ml_ground_truth_labels_TEST.csv"
 echo "timestamp,fault_type,severity,target_node" > $LABEL_FILE
 
 echo "================================================================="
