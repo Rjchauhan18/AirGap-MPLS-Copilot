@@ -5,3 +5,7 @@ joblib
 fastapi 
 uvicorn 
 pydantic
+streamlit
+plotly
+streamlit-agraph
+requests
