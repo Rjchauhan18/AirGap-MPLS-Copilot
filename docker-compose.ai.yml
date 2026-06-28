@@ -1,0 +1,20 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./ai_stack/qdrant_storage:/qdrant/storage
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ai_stack/ollama_storage:/root/.ollama
+      - ./ai_stack/models:/models:ro

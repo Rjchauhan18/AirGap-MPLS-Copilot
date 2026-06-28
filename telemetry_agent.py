@@ -3,9 +3,31 @@ import time
 import csv
 import os
 from datetime import datetime
+import requests
+import socket
 
 # ML Dataset File
 OUTPUT_FILE = "Model/sdwan_telemetry_test.csv"
+
+# API Endpoint for the AI Copilot
+COPILOT_API_URL = "http://127.0.0.1:8000/ingest_telemetry"
+
+
+def get_dynamic_device_identity():
+    """
+    Dynamically discovers the real name of the device.
+    If running in Containerlab, this grabs the exact container hostname 
+    (e.g., 'clab-sdwan-pe-br'), which perfectly matches the topology graph!
+    """
+    # 1. Allow environment variable override for ultimate flexibility
+    if "DEVICE_NAME" in os.environ:
+        return os.environ["DEVICE_NAME"]
+    
+    # 2. Dynamically pull the actual hostname of the machine/container
+    return socket.gethostname()
+
+# Get the real, actual name of this device dynamically
+ACTUAL_DEVICE_NAME = get_dynamic_device_identity()
 
 def run_cmd(container, cmd_list):
     """Helper function to execute commands safely inside Docker containers."""
@@ -125,9 +147,52 @@ while True:
             ospf_state, bgp_state, status
         ])
     
-    # 4. Strip root ownership so you can read the file freely
     fix_file_permissions()
     
     print(f"[{timestamp}] Lat: {latency:5.1f}ms | Loss: {loss:5.1f}% | OSPF: {ospf_state} | BGP: {bgp_state} | Util: {rx_rate}/{tx_rate} Bps | [{status}]")
     
+    # -------------------------------------------------------------
+    # 4. SEND LIVE DATA TO AI COPILOT API
+    # -------------------------------------------------------------
+    def get_site_context(device_name):
+        dev_lower = device_name.lower()
+        if "-br" in dev_lower or "_br" in dev_lower:
+            return "Branch-Office-Site"
+        elif "-dc" in dev_lower or "_dc" in dev_lower:
+            return "Data-Center-Site"
+        elif "core" in dev_lower:
+            return "Core-Transit-Backbone"
+        return "Enterprise-WAN-Edge"
+
+    dynamic_site = get_site_context(ACTUAL_DEVICE_NAME)
+
+    payload = {
+        "device": ACTUAL_DEVICE_NAME, 
+        "site": dynamic_site, 
+        "state": status.lower(),
+        "metrics": {
+            "avg_latency_ms": latency,
+            "jitter_ms": jitter,
+            "packet_loss_pct": loss,
+            "rx_bytes_per_sec": float(rx_rate)
+        }
+    }
+    
+    try:
+        # Use a short timeout so a slow API doesn't bottleneck our data polling
+        response = requests.post(COPILOT_API_URL, json=payload, timeout=2.0)
+        
+        # If the ML model flagged an anomaly, print the alert
+        if response.status_code == 200:
+            api_data = response.json()
+            if api_data.get("status") == "alert_generated":
+                print(f"  🚨 [COPILOT PREDICTION] {api_data.get('message')}")
+    except requests.exceptions.Timeout:
+        print("  ⚠️ [API] Connection timed out. Is the backend under heavy load?")
+    except requests.exceptions.ConnectionError:
+        print("  ⚠️ [API] Could not connect. Is 'python -m api.app' running?")
+    except Exception as e:
+        print(f"  ⚠️ [API] Unexpected error: {e}")
+
+    # Sleep before next poll
     time.sleep(2)

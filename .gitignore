@@ -40,3 +40,11 @@ env/
 .idea/
 .vscode/
 *.swp
+
+scripts/download_models.py
+scripts/delete_collection.py
+
+# Qdrant runtime storage
+ai_stack/
+
+output/
