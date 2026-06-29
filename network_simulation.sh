@@ -24,8 +24,17 @@ fi
 
 # 4. Deploy NATIVELY (No wrapper container)
 echo "🌐 Launching Native Containerlab topology..."
-sudo clab deploy -t sdwan-mpls.clab.yml --reconfigure
+sudo -E DOCKER_HOST=unix:///var/run/docker-native.sock clab deploy -t sdwan-mpls.clab.yml --reconfigure
 
+
+# Add this block at the end of network_simulation.sh after clab deploy
+echo "📦 Installing traffic tools into host nodes..."
+DOCKER="docker -H unix:///var/run/docker-native.sock"
+# $DOCKER cp /sbin/tc clab-sdwan-mpls-core-host-dc:/sbin/tc
+# $DOCKER cp /sbin/tc clab-sdwan-mpls-core-host-br:/sbin/tc
+$DOCKER cp /tmp/iperf3 clab-sdwan-mpls-core-host-dc:/usr/local/bin/iperf3
+$DOCKER cp /tmp/iperf3 clab-sdwan-mpls-core-host-br:/usr/local/bin/iperf3
+echo "✅ Traffic tools ready."
 echo "================================================================="
 echo "🎉 INFRASTRUCTURE STACK OPERATIONAL!"
 echo "================================================================="

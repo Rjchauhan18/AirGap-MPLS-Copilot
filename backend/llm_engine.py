@@ -1,14 +1,14 @@
 import logging
 import requests
 import threading
-
+from backend.config import OLLAMA_MODEL
 logger = logging.getLogger(__name__)
 
 # 1. Global lock for the LLM queue
 llm_lock = threading.Lock()
 
 class LLMEngine:
-    def __init__(self, ollama_url: str = "http://localhost:11434", model_name: str = "local-model"):
+    def __init__(self, ollama_url: str = "http://localhost:11434", model_name: str = OLLAMA_MODEL):
         self.ollama_url = ollama_url.rstrip("/")
         self.model_name = model_name 
         self.generate_endpoint = f"{self.ollama_url}/api/generate"
@@ -49,13 +49,16 @@ class LLMEngine:
             "options": {
                 "temperature": 0.1,
                 "top_p": 0.9
-            }
+            },
+            "think": False  
         }
 
         # The 'with' statement forces requests to queue up, one after the other
         with llm_lock:
             try:
                 logger.info(f"Querying local LLM ({self.model_name}) at {self.ollama_url}...")
+                logger.info(f"Prompt length: {len(full_prompt)} characters")
+                logger.info(f"Prompt preview:\n{full_prompt[:500]}")
                 response = requests.post(self.generate_endpoint, json=payload, timeout=260)
                 response.raise_for_status()
                 

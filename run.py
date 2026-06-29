@@ -17,7 +17,7 @@ def setup_logging():
 # TELEMETRY POLLING FUNCTIONS (Directly from Containerlab)
 # ---------------------------------------------------------
 def run_cmd(container, cmd_list):
-    base_cmd = ["sudo", "docker", "exec", container] + cmd_list
+    base_cmd = ["docker", "-H", "unix:///var/run/docker-native.sock", "exec", container] + cmd_list
     try:
         return subprocess.check_output(base_cmd, universal_newlines=True, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
