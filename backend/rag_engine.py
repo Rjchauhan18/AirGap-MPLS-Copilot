@@ -53,10 +53,26 @@ class RagEngine:
             # Extract payload/metadata defensively
             docs = []
             for hit in search_results:
+                # Our ingestion script stores fields directly on payload:
+                # - text (chunk)
+                # - source_file / source_path
+                # Earlier versions used langchain-style page_content/metadata.
+                payload = hit.payload or {}
+                content = (
+                    payload.get("text")
+                    or payload.get("page_content")
+                    or ""
+                )
+                source = (
+                    payload.get("source_file")
+                    or payload.get("source_path")
+                    or (payload.get("metadata", {}) or {}).get("source")
+                    or "Unknown Runbook"
+                )
                 docs.append({
                     "score": hit.score,
-                    "content": hit.payload.get("page_content", ""), 
-                    "source": hit.payload.get("metadata", {}).get("source", "Unknown Runbook")
+                    "content": content,
+                    "source": source,
                 })
             return docs
             

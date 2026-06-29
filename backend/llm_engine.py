@@ -66,6 +66,58 @@ class LLMEngine:
                 logger.error(f"Failed to communicate with local LLM: {str(e)}")
                 return "Critical Error: Air-gapped LLM backend is unreachable. Ensure the local Ollama service is running."
 
+    def generate_chat_answer(
+        self,
+        question: str,
+        rag_context: str,
+        incident_json: str | None = None,
+    ) -> str:
+        """
+        Operator chat endpoint.
+
+        This intentionally stays air-gapped and grounded:
+        - Uses only RAG context (and optional incident JSON if provided)
+        - Returns concise operator-ready guidance
+        """
+        system_prompt = self._build_system_prompt()
+
+        if incident_json:
+            user_prompt = (
+                f"Operator question:\n{question}\n\n"
+                f"Related incident context (JSON):\n{incident_json}\n\n"
+                f"Relevant internal runbooks/topology context:\n{rag_context}\n\n"
+                "Answer the operator. If the context is insufficient, say what is missing."
+            )
+        else:
+            user_prompt = (
+                f"Operator question:\n{question}\n\n"
+                f"Relevant internal runbooks/topology context:\n{rag_context}\n\n"
+                "Answer the operator. If the context is insufficient, say what is missing."
+            )
+
+        full_prompt = f"{system_prompt}\n\nUser:\n{user_prompt}\n\nCopilot:"
+
+        payload = {
+            "model": self.model_name,
+            "prompt": full_prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.1,
+                "top_p": 0.9,
+            },
+        }
+
+        with llm_lock:
+            try:
+                logger.info(f"Querying local LLM ({self.model_name}) at {self.ollama_url} for chat...")
+                response = requests.post(self.generate_endpoint, json=payload, timeout=260)
+                response.raise_for_status()
+                result = response.json()
+                return result.get("response", "Error: Empty response from LLM.").strip()
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Failed to communicate with local LLM: {str(e)}")
+                return "Critical Error: Air-gapped LLM backend is unreachable. Ensure the local Ollama service is running."
+
 if __name__ == "__main__":
     # Standalone Test
     logging.basicConfig(level=logging.INFO)

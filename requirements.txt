@@ -9,3 +9,6 @@ streamlit
 plotly
 streamlit-agraph
 requests
+qdrant-client
+sentence-transformers
+pytest

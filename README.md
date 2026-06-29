@@ -24,26 +24,50 @@ chmod +x setup.sh
 
 ---
 
-## 📡 Phase 2: Run the Unified NOC Copilot
+## 📡 Phase 2: Run the NOC Copilot (API + Dashboard)
 
-Instead of running separate agents and scripts, the unified `run.py` orchestrator handles telemetry polling, prediction, impact analysis, and LLM advisory generation.
+For a product-style demo, **FastAPI is the brain** and **Streamlit is the NOC UI**:
 
-1. **Start the Network Simulation:**
+Telemetry → `api/` → `backend/` pipeline → `output/` artifacts → Dashboard
+
+1. **Start the Network Simulation**
 ```bash
 sudo ./network_simulation.sh
 
 ```
 
-
-2. **Start the Copilot:**
+2. **Start the AI Stack (Qdrant + Ollama)**
 ```bash
-python3 run.py
+docker compose -f docker-compose.ai.yml up -d
 
 ```
 
+3. **Ingest RAG docs (one time)**
+```bash
+python scripts/ingest_docs.py
+```
 
+4. **Start the Backend API**
+```bash
+python -m api.app
+```
 
-*The Copilot will now automatically poll the network every 2 seconds, detect anomalies, and print the Incident Report directly to your terminal.*
+5. **Start the Telemetry Agent (sends live telemetry to the API + writes CSV)**
+```bash
+DEVICE_NAME=pe-br python telemetry_agent.py
+```
+
+6. **Start the NOC Dashboard**
+```bash
+streamlit run Dashboard/app.py
+```
+
+Optional (recommended): **generate continuous traffic** for more realistic utilization signals:
+```bash
+sudo ./scripts/start_traffic.sh
+```
+
+*The Dashboard auto-refreshes so when a failure is detected it shows an alert quickly; the copilot advisory is generated using local RAG + local LLM (no internet).*
 
 ---
 
@@ -103,7 +127,14 @@ sudo containerlab destroy --topo sdwan-mpls.clab.yml
 ## 📂 Project Structure
 
 * `/backend`: Core logic engines (Orchestrator, LLM, RAG, Predictor, Topology).
+* `/api`: REST API entrypoint (predict, pipeline, incidents, topology, chat, status).
+* `/Dashboard`: Streamlit NOC UI (polls the API and renders incidents/telemetry/chat/topology).
 * `/ai_stack`: Local models (Phi-3, Embeddings) and vector database storage.
 * `/rag_docs`: Knowledge base of runbooks and topology context.
 * `/output`: JSON artifacts of every generated incident.
-* `run.py`: The main entry point for the Unified NOC Copilot.
+* `run.py`: Legacy single-process runner (useful for quick local debugging).
+
+## Demo note (honest framing)
+
+- MPLS/VPN *impact* is computed deterministically by the `TopologyEngine` (no LLM hallucination).
+- The lab underlay is intentionally simplified (OSPF-based) for hackathon speed; the AI pipeline and offline copilot are the focus.

@@ -45,21 +45,36 @@
 
 # print(response["message"]["content"])
 
-import requests
+"""
+Manual smoke test (not a pytest test).
+
+This file is kept for developer convenience but should not fail CI/pytest when
+Ollama isn't running. Run it manually:
+
+  python test/test_llm.py
+"""
+
 import json
+import requests
 
 OLLAMA_URL = "http://localhost:11434/v1/chat/completions"
 
-payload = {
-    "model": "local-model",
-    "messages": [
-        {"role": "system", "content": "Return strict JSON only."},
-        {"role": "user", "content": "tell me any past network incidents."}
-    ],
-    "temperature": 0.1,
-    "max_tokens": 200
-}
 
-r = requests.post(OLLAMA_URL, json=payload, timeout=180)
-r.raise_for_status()
-print(r.json()["choices"][0]["message"]["content"])
+def main():
+    payload = {
+        "model": "local-model",
+        "messages": [
+            {"role": "system", "content": "Return strict JSON only."},
+            {"role": "user", "content": "tell me any past network incidents."},
+        ],
+        "temperature": 0.1,
+        "max_tokens": 200,
+    }
+
+    r = requests.post(OLLAMA_URL, json=payload, timeout=180)
+    r.raise_for_status()
+    print(r.json()["choices"][0]["message"]["content"])
+
+
+if __name__ == "__main__":
+    main()
