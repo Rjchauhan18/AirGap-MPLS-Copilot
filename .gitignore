@@ -48,3 +48,7 @@ scripts/delete_collection.py
 ai_stack/
 
 output/
+
+.cursor/
+
+.pytest_cache/

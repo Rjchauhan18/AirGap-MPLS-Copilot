@@ -11,8 +11,14 @@ from backend.topology_engine import TopologyEngine
 from backend.priority_engine import PriorityEngine
 from backend.rag_engine import RagEngine
 from backend.llm_engine import LLMEngine
-from backend.config import TOPOLOGY_FILE
-from backend.topology_engine import TopologyEngine
+from backend.config import (
+    TOPOLOGY_FILE,
+    OUTPUT_DIR,
+    INCIDENT_DIR,
+    REPORT_DIR,
+    PREDICTION_DIR,
+    VALIDATION_DIR,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -22,9 +28,16 @@ class CopilotOrchestrator:
         logger.info("Initializing SD-WAN AI Copilot Orchestrator...")
         
         # Ensure output directories exist for reproducibility (Step 12)
-        self.output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output")
-        self.incidents_dir = os.path.join(self.output_dir, "incidents")
+        self.output_dir = str(OUTPUT_DIR)
+        self.incidents_dir = str(INCIDENT_DIR)
+        self.reports_dir = str(REPORT_DIR)
+        self.predictions_dir = str(PREDICTION_DIR)
+        self.validation_dir = str(VALIDATION_DIR)
+
         os.makedirs(self.incidents_dir, exist_ok=True)
+        os.makedirs(self.reports_dir, exist_ok=True)
+        os.makedirs(self.predictions_dir, exist_ok=True)
+        os.makedirs(self.validation_dir, exist_ok=True)
 
         # Initialize engines
         self.predictor = Predictor()
@@ -35,6 +48,20 @@ class CopilotOrchestrator:
         self.rag_engine = RagEngine()
         self.llm_engine = LLMEngine()
 
+    def _save_prediction(self, prediction: Dict[str, Any]):
+        """
+        Persist raw predictor output for reproducibility.
+        """
+        try:
+            ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            device = str(prediction.get("device", "unknown")).replace("/", "_")
+            filename = f"{ts}_{device}.json"
+            filepath = os.path.join(self.predictions_dir, filename)
+            with open(filepath, "w") as f:
+                json.dump(prediction, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save prediction artifact: {e}")
+
     def _save_incident_report(self, incident_id: str, full_report: Dict[str, Any]):
         """Persists the final incident to disk as a JSON artifact."""
         filepath = os.path.join(self.incidents_dir, f"{incident_id}.json")
@@ -44,6 +71,17 @@ class CopilotOrchestrator:
             logger.info(f"Saved complete incident report to {filepath}")
         except Exception as e:
             logger.error(f"Failed to save incident report {incident_id}: {str(e)}")
+
+    def _save_report(self, incident_id: str, full_report: Dict[str, Any]):
+        """
+        Save a copy into output/reports (stable location for dashboards/export).
+        """
+        filepath = os.path.join(self.reports_dir, f"{incident_id}.json")
+        try:
+            with open(filepath, "w") as f:
+                json.dump(full_report, f, indent=4)
+        except Exception as e:
+            logger.warning(f"Failed to save report artifact {incident_id}: {e}")
 
     def run_pipeline(self, telemetry_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -58,6 +96,7 @@ class CopilotOrchestrator:
             if not prediction_raw:
                 logger.info("No anomalies detected. Network is stable.")
                 return None
+            self._save_prediction(prediction_raw)
 
             # 2. Incident Creation Phase
             logger.info("Step 2: Structuring prediction into standard Incident...")
@@ -98,6 +137,7 @@ class CopilotOrchestrator:
             }
 
             self._save_incident_report(incident.incident_id, final_report)
+            self._save_report(incident.incident_id, final_report)
             logger.info("--- Copilot Analysis Pipeline Complete ---")
             
             return final_report

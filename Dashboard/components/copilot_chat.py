@@ -1,6 +1,6 @@
 import streamlit as st
-from backend.api import ask_copilot
-
+from services.api_client import ask_copilot
+    
 def render_chat():
     if "messages" not in st.session_state:
         st.session_state.messages = [
@@ -18,6 +18,10 @@ def render_chat():
 
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response = ask_copilot(prompt)
-                st.markdown(response["answer"])
-        st.session_state.messages.append({"role": "assistant", "content": response["answer"]})
+                response = ask_copilot(prompt)  # {answer, sources}
+                answer = response.get("answer", "No answer returned.")
+                sources = response.get("sources", [])
+                st.markdown(answer)
+                if sources:
+                    st.caption("Sources: " + ", ".join(sources))
+        st.session_state.messages.append({"role": "assistant", "content": answer})

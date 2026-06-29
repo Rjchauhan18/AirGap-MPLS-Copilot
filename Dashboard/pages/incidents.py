@@ -1,8 +1,9 @@
 import streamlit as st
 from components.prediction_table import render_prediction_table
-from utils.prediction_reader import load_prediction_history
+# from utils.prediction_reader import load_prediction_history
 from components.sidebar import render_sidebar
 from utils.theme import apply_theme
+from services.api_client import get_incidents
 
 st.set_page_config(page_title="Incident Timeline", layout="wide")
 apply_theme()
@@ -12,8 +13,8 @@ st.title("Incident Timeline")
 
 st.markdown("### Detected Predictions")
 
-history = load_prediction_history()
-render_prediction_table(history)
+incidents = get_incidents()
+render_prediction_table(incidents)
 
 st.markdown("---")
 st.markdown("### Operator Notes")
