@@ -5,10 +5,23 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.138.2",
+    "httpx>=0.28.1",
+    "httpx2>=2.5.0",
+    "joblib>=1.5.3",
+    "mem0ai[extras,nlp]>=2.0.10",
+    "numpy>=2.4.6",
+    "ollama>=0.6.2",
     "pandas>=3.0.3",
     "plotly>=6.8.0",
+    "pydantic>=2.13.4",
+    "pytest>=9.1.1",
+    "pytest-mock>=3.15.1",
+    "qdrant-client>=1.18.0",
     "requests>=2.34.2",
     "scikit-learn>=1.9.0",
+    "sentence-transformers>=5.6.0",
     "streamlit>=1.58.0",
     "streamlit-agraph>=0.0.45",
+    "uvicorn>=0.49.0",
 ]

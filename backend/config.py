@@ -11,6 +11,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CLAB_DIR = os.path.join(PROJECT_ROOT, "clab-sdwan-mpls-core")
 TOPOLOGY_FILE = os.path.join(CLAB_DIR, "topology-data.json")
 
+
+# =====================================================
+# Mem0 Memory Layer
+# =====================================================
+
+QDRANT_MEMORY_COLLECTION = "sdwan_memories"
+DEFAULT_OPERATOR_ID = "operator_alpha"
+
 # =====================================================
 # AI Stack
 # =====================================================

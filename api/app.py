@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from api.routes import router
+from pydantic import BaseModel
 
 app = FastAPI(
     title="SD-WAN Copilot API",

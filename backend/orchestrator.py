@@ -2,15 +2,16 @@ import os
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
-# Import all our custom engines
-from backend.predictor import Predictor # Assuming you built this in Step 2
+# Import our custom engines
+from backend.predictor import Predictor 
 from backend.incident_engine import IncidentEngine
 from backend.topology_engine import TopologyEngine
 from backend.priority_engine import PriorityEngine
 from backend.rag_engine import RagEngine
 from backend.llm_engine import LLMEngine
+from backend.memory_engine import MemoryEngine  # New Import
 from backend.config import (
     TOPOLOGY_FILE,
     OUTPUT_DIR,
@@ -18,8 +19,8 @@ from backend.config import (
     REPORT_DIR,
     PREDICTION_DIR,
     VALIDATION_DIR,
+    DEFAULT_OPERATOR_ID
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,6 @@ class CopilotOrchestrator:
     def __init__(self):
         logger.info("Initializing SD-WAN AI Copilot Orchestrator...")
         
-        # Ensure output directories exist for reproducibility (Step 12)
         self.output_dir = str(OUTPUT_DIR)
         self.incidents_dir = str(INCIDENT_DIR)
         self.reports_dir = str(REPORT_DIR)
@@ -42,16 +42,13 @@ class CopilotOrchestrator:
         # Initialize engines
         self.predictor = Predictor()
         self.incident_engine = IncidentEngine()
-        # self.topology_engine = TopologyEngine()
         self.topology_engine = TopologyEngine(topology_path=TOPOLOGY_FILE)
         self.priority_engine = PriorityEngine()
         self.rag_engine = RagEngine()
         self.llm_engine = LLMEngine()
+        self.memory_engine = MemoryEngine()  # New Instantiation
 
     def _save_prediction(self, prediction: Dict[str, Any]):
-        """
-        Persist raw predictor output for reproducibility.
-        """
         try:
             ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
             device = str(prediction.get("device", "unknown")).replace("/", "_")
@@ -63,7 +60,6 @@ class CopilotOrchestrator:
             logger.warning(f"Failed to save prediction artifact: {e}")
 
     def _save_incident_report(self, incident_id: str, full_report: Dict[str, Any]):
-        """Persists the final incident to disk as a JSON artifact."""
         filepath = os.path.join(self.incidents_dir, f"{incident_id}.json")
         try:
             with open(filepath, 'w') as f:
@@ -73,9 +69,6 @@ class CopilotOrchestrator:
             logger.error(f"Failed to save incident report {incident_id}: {str(e)}")
 
     def _save_report(self, incident_id: str, full_report: Dict[str, Any]):
-        """
-        Save a copy into output/reports (stable location for dashboards/export).
-        """
         filepath = os.path.join(self.reports_dir, f"{incident_id}.json")
         try:
             with open(filepath, "w") as f:
@@ -83,10 +76,25 @@ class CopilotOrchestrator:
         except Exception as e:
             logger.warning(f"Failed to save report artifact {incident_id}: {e}")
 
-    def run_pipeline(self, telemetry_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        Executes the end-to-end Air-Gapped NOC Workflow.
-        """
+    def handle_chat_with_memory(self, operator_id: str, question: str, rag_context: str, incident_json: str | None = None) -> str:
+        """Handles manual chats, extracts history, updates cognitive profiles dynamically."""
+        # 1. Fetch relevant memories for this specific operator
+        mem_context = self.memory_engine.get_operator_context(operator_id=operator_id, query=question)
+        
+        # 2. Run synthesis engine pass matching parameters
+        answer = self.llm_engine.generate_chat_answer(
+            question=question,
+            rag_context=rag_context,
+            incident_json=incident_json,
+            memory_context=mem_context
+        )
+        
+        # 3. Log facts asynchronously into memory storage
+        self.memory_engine.add_interaction_memory(operator_id=operator_id, query=question, response=answer)
+        return answer
+
+    def run_pipeline(self, telemetry_data: Dict[str, Any], operator_id: str = DEFAULT_OPERATOR_ID) -> Optional[Dict[str, Any]]:
+        """Executes the end-to-end Air-Gapped NOC Workflow with memory capabilities."""
         try:
             logger.info("--- Starting Copilot Analysis Pipeline ---")
 
@@ -120,12 +128,16 @@ class CopilotOrchestrator:
             retrieved_docs = self.rag_engine.retrieve(search_query)
             context_string = self.rag_engine.build_context_string(retrieved_docs)
 
+            # Fetch background operator contexts before inference
+            memory_context = self.memory_engine.get_operator_context(operator_id=operator_id, query=search_query)
+
             # 6. LLM Copilot Phase
             logger.info("Step 6: Generating autonomous NOC advisory...")
             incident_json = incident.model_dump_json(indent=2)
             copilot_advice = self.llm_engine.generate_incident_analysis(
                 incident_json=incident_json,
-                rag_context=context_string
+                rag_context=context_string,
+                memory_context=memory_context
             )
 
             # 7. Final Assembly and Output
@@ -138,8 +150,11 @@ class CopilotOrchestrator:
 
             self._save_incident_report(incident.incident_id, final_report)
             self._save_report(incident.incident_id, final_report)
-            logger.info("--- Copilot Analysis Pipeline Complete ---")
             
+            # Commit the analysis transaction pattern into mem0 layer
+            self.memory_engine.add_interaction_memory(operator_id=operator_id, query=search_query, response=copilot_advice)
+            
+            logger.info("--- Copilot Analysis Pipeline Complete ---")
             return final_report
 
         except Exception as e:
