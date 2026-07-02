@@ -52,3 +52,5 @@ output/
 .cursor/
 
 .pytest_cache/
+
+logs/

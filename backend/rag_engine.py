@@ -2,8 +2,8 @@ import os
 import logging
 from typing import List, Dict, Any
 
-# These must be installed in your environment:
-# pip install qdrant-client sentence-transformers
+# os.environ["HF_HUB_OFFLINE"] = "1"
+
 from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
 

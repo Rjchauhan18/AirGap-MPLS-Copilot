@@ -18,6 +18,9 @@ sys.path.append(base_dir)
 router = APIRouter()
 orchestrator = None
 
+ACTIVE_INCIDENTS: Dict[str, float] = {}  # Tracks { "device_name": timestamp }
+INCIDENT_COOLDOWN_SECONDS = 300
+
 
 def get_orchestrator():
     global orchestrator
@@ -126,22 +129,41 @@ def background_pipeline_executor(orch: CopilotOrchestrator, prediction_raw: Dict
 @router.post("/ingest_telemetry")
 async def ingest_telemetry(payload: TelemetryPayload, background_tasks: BackgroundTasks):
     try:
+        import time  # Ensure time is imported for timestamps
+        
         telemetry_data = payload.model_dump()
         op_id = telemetry_data.pop("operator_id", DEFAULT_OPERATOR_ID)
         orch = get_orchestrator()
         
         prediction_raw = orch.predictor.analyze_telemetry(telemetry_data)
         if prediction_raw:
+            device_name = payload.device
+            current_time = time.time()
+            
+            # Check if this specific device is already in a cooldown period
+            if device_name in ACTIVE_INCIDENTS:
+                time_since_last_alert = current_time - ACTIVE_INCIDENTS[device_name]
+                if time_since_last_alert < INCIDENT_COOLDOWN_SECONDS:
+                    # Bypasses heavy LLM execution and alerts quietly
+                    return {
+                        "status": "alert_suppressed",
+                        "message": f"Anomaly detected on {device_name}, but analysis is already underway/throttled."
+                    }
+            
+            # Set/Reset cooldown timestamp for the device and trigger pipeline
+            ACTIVE_INCIDENTS[device_name] = current_time
+            
             background_tasks.add_task(background_pipeline_executor, orch, prediction_raw, op_id)
             return {
                 "status": "alert_generated",
                 "message": "🚨 IMPENDING FAULT DETECTED! Processing autonomous analysis in background.",
                 "prediction": prediction_raw
             }
+            
         return {"status": "normal", "message": "Telemetry processed. Network is healthy."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 @router.post("/predict")
 async def predict(payload: TelemetryPayload):
     try:

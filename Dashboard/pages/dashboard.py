@@ -1,51 +1,14 @@
-# import streamlit as st
-# from utils.theme import apply_theme
-# from components.sidebar import render_sidebar
-
-# st.set_page_config(
-#     page_title="NOC AI Copilot",
-#     page_icon="🛡️",
-#     layout="wide",
-#     initial_sidebar_state="expanded"
-# )
-
-# apply_theme()
-
-# st.title("Air-Gapped Predictive AI NOC Copilot")
-
-# # Note: Streamlit natively supports multi-page apps through the 'pages/' directory.
-# # `app.py` acts as the entrypoint and default landing page (Dashboard).
-# # However, to keep it clean, we can redirect or just display the dashboard here.
-
-# import pages.dashboard as dashboard
-# dashboard.main()
-
 import streamlit as st
-from utils.theme import apply_theme
-from components.sidebar import render_sidebar
 from components.cards import metric_card
 from components.charts import render_line_chart
 from utils.telemetry_reader import get_telemetry_data, get_latest_metrics
 from services.api_client import get_incidents, get_status
 
-# 1. Global Page Configuration (Must be the very first Streamlit command)
-st.set_page_config(
-    page_title="NOC AI Copilot",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# 2. Apply Custom Layout Styling & Render Global Sidebar
-apply_theme()
-render_sidebar()
-
-# 3. Dashboard UI Content
 st.title("Air-Gapped Predictive AI NOC Copilot")
 st.markdown("## Global Dashboard")
 st.caption("Auto-refresh: every 2 seconds (alerts appear quickly).")
 
-# Live Data Fragment Optimization
+# ⚡ Isolated Live Data Fragment (Will now update smoothly without reloading the window!)
 @st.fragment(run_every="2s")
 def render_live():
     status = {}
@@ -126,7 +89,5 @@ def render_live():
         else:
             st.metric("Estimated Time To Impact (ETA)", "N/A")
 
-
-
-# Execute live loop
+# Fire off the live display fragment loop
 render_live()

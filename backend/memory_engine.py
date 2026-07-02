@@ -1,14 +1,17 @@
 import os
 import logging
 from urllib.parse import urlparse
-from mem0 import Memory
+
 from backend.config import (
     QDRANT_URL,
     OLLAMA_URL,
     OLLAMA_MODEL,
     EMBEDDING_MODEL,
-    QDRANT_MEMORY_COLLECTION
+    QDRANT_MEMORY_COLLECTION,
+    
 )
+
+from mem0 import Memory
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +52,18 @@ mem0_config = {
 class MemoryEngine:
     def __init__(self):
         logger.info("Initializing Local Air-Gapped Mem0 Engine...")
+
+        # Force offline mode for transformers
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        os.environ["HF_HUB_OFFLINE"] = "1"
+
         # Set dummy key to bypass fallback validation checks inside mem0
         os.environ["OPENAI_API_KEY"] = "fully-offline"
         try:
+            # When initialized, mem0 will look at the 'model' path 
+            # and because TRANSFORMERS_OFFLINE is 1, it will NOT try to download.
             self.memory = Memory.from_config(mem0_config)
+            logger.info("Mem0 connected to local model.")
             logger.info(f"Mem0 successfully connected to Qdrant collection: {QDRANT_MEMORY_COLLECTION}")
         except Exception as e:
             logger.error(f"Failed to initialize Mem0 memory wrapper: {e}")

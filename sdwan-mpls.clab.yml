@@ -1,3 +1,97 @@
+# name: sdwan-mpls-core
+
+# topology:
+#   defaults:
+#     kind: linux
+#     image: frrouting/frr:latest
+
+#   nodes:
+#     # ---------------------------------------------
+#     # UNDERLAY: MPLS / ISP PROVIDER CORE (P & PE)
+#     # ---------------------------------------------
+#     p-core:
+#       sysctls:
+#         net.ipv4.ip_forward: 1
+#       binds:
+#         - ./config/p-core/daemons:/etc/frr/daemons
+#         - ./config/p-core/frr.conf:/etc/frr/frr.conf
+#     pe-dc:
+#       sysctls:
+#         net.ipv4.ip_forward: 1
+#       binds:
+#         - ./config/pe-dc/daemons:/etc/frr/daemons
+#         - ./config/pe-dc/frr.conf:/etc/frr/frr.conf
+#     pe-br:
+#       sysctls:
+#         net.ipv4.ip_forward: 1
+#       binds:
+#         - ./config/pe-br/daemons:/etc/frr/daemons
+#         - ./config/pe-br/frr.conf:/etc/frr/frr.conf
+#     pe-hub:
+#       sysctls:
+#         net.ipv4.ip_forward: 1
+#       binds:
+#         - ./config/pe-hub/daemons:/etc/frr/daemons
+#         - ./config/pe-hub/frr.conf:/etc/frr/frr.conf
+
+#     # ---------------------------------------------
+#     # OVERLAY: ENTERPRISE SD-WAN EDGES (CE)
+#     # ---------------------------------------------
+#     edge-dc:
+#       sysctls:
+#         net.ipv4.ip_forward: 1
+#       binds:
+#         - ./config/edge-dc/daemons:/etc/frr/daemons
+#         - ./config/edge-dc/frr.conf:/etc/frr/frr.conf
+#     edge-br:
+#       sysctls:
+#         net.ipv4.ip_forward: 1
+#       binds:
+#         - ./config/edge-br/daemons:/etc/frr/daemons
+#         - ./config/edge-br/frr.conf:/etc/frr/frr.conf
+#     edge-hub:
+#       sysctls:
+#         net.ipv4.ip_forward: 1
+#       binds:
+#         - ./config/edge-hub/daemons:/etc/frr/daemons
+#         - ./config/edge-hub/frr.conf:/etc/frr/frr.conf
+
+#     # ---------------------------------------------
+#     # END WORKLOADS: NETSHOOT (AIR-GAPPED READY)
+#     # No 'apk add' needed - tools are pre-installed
+#     # ---------------------------------------------
+#     host-dc:
+#       image: nicolaka/netshoot:latest
+#       exec:
+#         - ip addr add 192.168.1.10/24 dev eth1
+#         - ip route add 192.168.0.0/16 via 192.168.1.1
+#     host-br:
+#       image: nicolaka/netshoot:latest  
+#       exec:
+#         - ip addr add 192.168.2.10/24 dev eth1
+#         - ip route add 192.168.0.0/16 via 192.168.2.1
+#     host-hub:
+#       image: nicolaka/netshoot:latest
+#       exec:
+#         - ip addr add 192.168.3.10/24 dev eth1
+#         - ip route add 192.168.0.0/16 via 192.168.3.1
+
+#   links:
+#     # Underlay Core Links (MPLS Backbone)
+#     - endpoints: ["pe-dc:eth1", "p-core:eth1"]
+#     - endpoints: ["pe-br:eth1", "p-core:eth2"]
+#     - endpoints: ["pe-hub:eth1", "p-core:eth3"]
+
+#     # PE to CE Links (Access Links)
+#     - endpoints: ["edge-dc:eth1", "pe-dc:eth2"]
+#     - endpoints: ["edge-br:eth1", "pe-br:eth2"]
+#     - endpoints: ["edge-hub:eth1", "pe-hub:eth2"]
+
+#     # CE to Host Links (Local LAN)
+#     - endpoints: ["host-dc:eth1", "edge-dc:eth2"]
+#     - endpoints: ["host-br:eth1", "edge-br:eth2"]
+#     - endpoints: ["host-hub:eth1", "edge-hub:eth2"]
+
 name: sdwan-mpls-core
 
 topology:
@@ -15,18 +109,28 @@ topology:
       binds:
         - ./config/p-core/daemons:/etc/frr/daemons
         - ./config/p-core/frr.conf:/etc/frr/frr.conf
+        - ./logs/router/p-core:/var/log/frr
     pe-dc:
       sysctls:
         net.ipv4.ip_forward: 1
       binds:
         - ./config/pe-dc/daemons:/etc/frr/daemons
         - ./config/pe-dc/frr.conf:/etc/frr/frr.conf
+        - ./logs/router/pe-dc:/var/log/frr
     pe-br:
       sysctls:
         net.ipv4.ip_forward: 1
       binds:
         - ./config/pe-br/daemons:/etc/frr/daemons
         - ./config/pe-br/frr.conf:/etc/frr/frr.conf
+        - ./logs/router/pe-br:/var/log/frr
+    pe-hub:
+      sysctls:
+        net.ipv4.ip_forward: 1
+      binds:
+        - ./config/pe-hub/daemons:/etc/frr/daemons
+        - ./config/pe-hub/frr.conf:/etc/frr/frr.conf
+        - ./logs/router/pe-hub:/var/log/frr
 
     # ---------------------------------------------
     # OVERLAY: ENTERPRISE SD-WAN EDGES (CE)
@@ -37,33 +141,53 @@ topology:
       binds:
         - ./config/edge-dc/daemons:/etc/frr/daemons
         - ./config/edge-dc/frr.conf:/etc/frr/frr.conf
+        - ./logs/router/edge-dc:/var/log/frr
     edge-br:
       sysctls:
         net.ipv4.ip_forward: 1
       binds:
         - ./config/edge-br/daemons:/etc/frr/daemons
         - ./config/edge-br/frr.conf:/etc/frr/frr.conf
+        - ./logs/router/edge-br:/var/log/frr
+    edge-hub:
+      sysctls:
+        net.ipv4.ip_forward: 1
+      binds:
+        - ./config/edge-hub/daemons:/etc/frr/daemons
+        - ./config/edge-hub/frr.conf:/etc/frr/frr.conf
+        - ./logs/router/edge-hub:/var/log/frr
 
     # ---------------------------------------------
     # END WORKLOADS & TRAFFIC GENERATORS
     # ---------------------------------------------
     host-dc:
-      image: alpine:latest
+      image: nicolaka/netshoot:latest
       exec:
-        - apk add --no-cache iperf3 iproute2-minimal
         - ip addr add 192.168.1.10/24 dev eth1
-        - ip route add 192.168.2.0/24 via 192.168.1.1
+        - ip route add 192.168.0.0/16 via 192.168.1.1
     host-br:
-      image: alpine:latest
+      image: nicolaka/netshoot:latest  
       exec:
-        - apk add --no-cache iperf3 iproute2-minimal
         - ip addr add 192.168.2.10/24 dev eth1
-        - ip route add 192.168.1.0/24 via 192.168.2.1
+        - ip route add 192.168.0.0/16 via 192.168.2.1
+    host-hub:
+      image: nicolaka/netshoot:latest
+      exec:
+        - ip addr add 192.168.3.10/24 dev eth1
+        - ip route add 192.168.0.0/16 via 192.168.3.1
 
   links:
+    # Underlay Core Provider Links
     - endpoints: ["pe-dc:eth1", "p-core:eth1"]
     - endpoints: ["pe-br:eth1", "p-core:eth2"]
+    - endpoints: ["pe-hub:eth1", "p-core:eth3"]
+
+    # PE to Edge Customer Handoffs
     - endpoints: ["edge-dc:eth1", "pe-dc:eth2"]
     - endpoints: ["edge-br:eth1", "pe-br:eth2"]
+    - endpoints: ["edge-hub:eth1", "pe-hub:eth2"]
+
+    # Edge to Internal LAN Hosts
     - endpoints: ["host-dc:eth1", "edge-dc:eth2"]
     - endpoints: ["host-br:eth1", "edge-br:eth2"]
+    - endpoints: ["host-hub:eth1", "edge-hub:eth2"]

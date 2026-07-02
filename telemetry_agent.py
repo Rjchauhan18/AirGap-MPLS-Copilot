@@ -3,6 +3,8 @@ import time
 import csv
 import os
 from datetime import datetime
+from requests.adapters import HTTPAdapter 
+from urllib3.poolmanager import PoolManager
 import requests
 import socket
 
@@ -12,6 +14,17 @@ OUTPUT_FILE = "Model/sdwan_telemetry_test.csv"
 # API Endpoint for the AI Copilot
 COPILOT_API_URL = "http://127.0.0.1:8000/ingest_telemetry"
 
+class SourcePortAdapter(HTTPAdapter):
+    def __init__(self, source_port, *args, **kwargs):
+        self.source_port = source_port
+        super().__init__(*args, **kwargs)
+
+    def init_poolmanager(self, connections, maxsize, block=False, **pool_kwargs):
+        # Bind to default local IP ('0.0.0.0') on your chosen specific port
+        pool_kwargs['source_address'] = ('0.0.0.0', self.source_port)
+        self.poolmanager = PoolManager(
+            num_pools=connections, maxsize=maxsize, block=block, **pool_kwargs
+        )
 
 def get_dynamic_device_identity():
     """Dynamically discovers the real name of the device."""
@@ -27,6 +40,8 @@ def get_site_context(device_name):
         return "Branch-Office-Site"
     elif "-dc" in dev_lower or "_dc" in dev_lower:
         return "Data-Center-Site"
+    elif "-hub" in dev_lower or "_hub" in dev_lower:
+        return "Regional-Hub-Gateway"
     elif "core" in dev_lower:
         return "Core-Transit-Backbone"
     return "Enterprise-WAN-Edge"
@@ -48,11 +63,9 @@ def fix_file_permissions():
         subprocess.run(["chown", "-R", f"{sudo_user}:{sudo_user}", "Model/"], stderr=subprocess.DEVNULL)
 
 
-def get_ping_stats():
-    """Captures Latency, Jitter, and Packet Loss from the End-Host."""
-    output = run_cmd("clab-sdwan-mpls-core-host-dc", ["ping", "-c", "2", "-W", "1", "192.168.1.1"])
+def parse_ping_output(output):
+    """Parses raw ping string output for metrics."""
     avg_lat, jitter, packet_loss = 999.0, 999.0, 100.0
-    
     if not output:
         return avg_lat, jitter, packet_loss
         
@@ -72,19 +85,44 @@ def get_ping_stats():
     return avg_lat, jitter, packet_loss
 
 
+def get_network_wide_ping():
+    """Captures Latency, Jitter, and Packet Loss across DC, Branch, and Hub fabrics."""
+    dc_out = run_cmd("clab-sdwan-mpls-core-host-dc", ["ping", "-c", "5", "-i", "0.2", "-W", "1", "192.168.1.1"])
+    br_out = run_cmd("clab-sdwan-mpls-core-host-br", ["ping", "-c", "5", "-i", "0.2", "-W", "1", "192.168.2.1"])
+    hub_out = run_cmd("clab-sdwan-mpls-core-host-hub", ["ping", "-c", "5", "-i", "0.2", "-W", "1", "192.168.3.1"])
+    
+    dc_lat, dc_jit, dc_loss = parse_ping_output(dc_out)
+    br_lat, br_jit, br_loss = parse_ping_output(br_out)
+    hub_lat, hub_jit, hub_loss = parse_ping_output(hub_out)
+    
+    max_loss = max(dc_loss, br_loss, hub_loss)
+    max_lat = max(dc_lat, br_lat, hub_lat)
+    max_jit = max(dc_jit, br_jit, hub_jit)
+    
+    return max_lat, max_jit, max_loss
+
 def get_routing_status():
-    """Captures OSPF and BGP Adjacency States from the Provider Edge Router."""
-    ospf_output = run_cmd("clab-sdwan-mpls-core-pe-br", ["vtysh", "-c", "show ip ospf neighbor"])
-    ospf_healthy = 1 if "Full" in ospf_output else 0
+    """Aggregates OSPF and BGP Adjacency States from all Provider Edge Routers."""
+    routers = ["pe-dc", "pe-br", "pe-hub"]
+    ospf_healthy = 1
+    bgp_healthy = 1
     
-    bgp_output = run_cmd("clab-sdwan-mpls-core-pe-br", ["vtysh", "-c", "show bgp summary"])
-    bgp_healthy = 0 if ("Idle" in bgp_output or "Active" in bgp_output) else 1
-    
+    for rtr in routers:
+        container_name = f"clab-sdwan-mpls-core-{rtr}"
+        
+        ospf_output = run_cmd(container_name, ["vtysh", "-c", "show ip ospf neighbor"])
+        if "Full" not in ospf_output:
+            ospf_healthy = 0
+            
+        bgp_output = run_cmd(container_name, ["vtysh", "-c", "show bgp summary"])
+        if "Idle" in bgp_output or "Active" in bgp_output or not bgp_output:
+            bgp_healthy = 0
+            
     return ospf_healthy, bgp_healthy
 
 
 def get_interface_stats():
-    """Captures raw SNMP-style Interface Utilization and Error Counters from the Core."""
+    """Captures raw Interface Utilization from the Core Transit Backbone."""
     rx_bytes_str = run_cmd("clab-sdwan-mpls-core-p-core", ["cat", "/sys/class/net/eth1/statistics/rx_bytes"]).strip()
     tx_bytes_str = run_cmd("clab-sdwan-mpls-core-p-core", ["cat", "/sys/class/net/eth1/statistics/tx_bytes"]).strip()
     rx_dropped_str = run_cmd("clab-sdwan-mpls-core-p-core", ["cat", "/sys/class/net/eth1/statistics/rx_dropped"]).strip()
@@ -122,19 +160,28 @@ prev_rx = 0
 prev_tx = 0
 prev_time = time.time()
 
-# 🚀 FIX: Instantiate a persistent connection session context before entering the stream loop
 with requests.Session() as session:
+    
+    # <-- NEW: Explicit HTTP Pooling Configuration
+    # pool_connections: number of distinct connection pools to keep around (e.g., how many different hosts you are talking to)
+    # pool_maxsize: max number of connections to keep in the pool (e.g., concurrent threads/requests to the same host)
+    adapter = SourcePortAdapter(source_port=55555, pool_connections=10, pool_maxsize=10)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)    # ------------------------------------------------->
+
     while True:
         current_time = time.time()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # 1. Poll metrics
-        latency, jitter, loss = get_ping_stats()
+        # 1. Poll metrics network-wide
+        latency, jitter, loss = get_network_wide_ping()
         ospf_state, bgp_state = get_routing_status()
         rx_bytes, tx_bytes, rx_dropped = get_interface_stats()
         
-        # 2. Calculate rates
+        # 2. Calculate traffic rates
         time_diff = current_time - prev_time
+        if time_diff <= 0:
+            time_diff = 0.001
         rx_rate = int((rx_bytes - prev_rx) / time_diff) if prev_rx > 0 else 0
         tx_rate = int((tx_bytes - prev_tx) / time_diff) if prev_tx > 0 else 0
         
@@ -142,14 +189,15 @@ with requests.Session() as session:
         prev_tx = tx_bytes
         prev_time = current_time
         
-        if loss == 100.0 or latency >= 999.0 or ospf_state == 0:
+        # 3. State Engine evaluation
+        if loss == 100.0 or latency >= 999.0 or ospf_state == 0 or bgp_state == 0:
             status = "DOWN"
         elif loss > 0.0 or rx_dropped > 0:
             status = "DEGRADED"
         else:
             status = "UP"
         
-        # 3. Log data to CSV file cache
+        # 4. Log data to CSV file cache
         with open(OUTPUT_FILE, mode='a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow([
@@ -159,9 +207,9 @@ with requests.Session() as session:
             ])
         fix_file_permissions()
         
-        print(f"[{timestamp}] Lat: {latency:5.1f}ms | Loss: {loss:5.1f}% | OSPF: {ospf_state} | BGP: {bgp_state} | Util: {rx_rate}/{tx_rate} Bps | [{status}]")
+        print(f"[{timestamp}] Lat: {latency:5.1f}ms | Jit: {jitter:4.1f}ms | Loss: {loss:5.1f}% | OSPF: {ospf_state} | BGP: {bgp_state} | Util: {rx_rate}/{tx_rate} Bps | [{status}]")        
         
-        # 4. Construct API Payload
+        # 5. Construct API Payload
         payload = {
             "device": ACTUAL_DEVICE_NAME, 
             "site": DYNAMIC_SITE, 
@@ -174,17 +222,17 @@ with requests.Session() as session:
             }
         }
         
-        # 5. Pipeline Telemetry Data Delivery
         try:
-            # Using session.post instead of requests.post leverages HTTP Keep-Alive
-            response = session.post(COPILOT_API_URL, json=payload, timeout=1.5)
+            # Added keep-alive header and bumped timeout to 10 seconds to accommodate heavy LLM processing
+            headers = {"Connection": "keep-alive"}
+            response = session.post(COPILOT_API_URL, json=payload, headers=headers, timeout=1000.0)
             
             if response.status_code == 200:
                 api_data = response.json()
                 if api_data.get("status") == "alert_generated":
                     print(f"  🚨 [COPILOT PREDICTION] {api_data.get('message')}")
         except requests.exceptions.Timeout:
-            print("  ⚠️ [API] Connection timed out. Reusing connection pipe on next frame...")
+            print("  ⚠️ [API] Connection timed out. AI backend took longer than 10 seconds to respond.")
         except requests.exceptions.ConnectionError:
             print("  ⚠️ [API] Stream offline. Retrying destination pipeline mapping...")
         except Exception as e:

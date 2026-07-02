@@ -1,6 +1,10 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+import warnings
+# Suppress the specific websockets/uvicorn deprecation warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="websockets")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="uvicorn")
+
+from fastapi import FastAPI
 from api.routes import router
-from pydantic import BaseModel
 
 app = FastAPI(
     title="SD-WAN Copilot API",
@@ -13,5 +17,11 @@ app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
-    # FIX: Set reload=False to prevent multiple processes from locking the Qdrant DB
-    uvicorn.run("api.app:app", host="0.0.0.0", port=8000, reload=False)
+    # Increased timeout_keep_alive to 30 seconds to keep the pool active between telemetry loops
+    uvicorn.run(
+        "api.app:app", 
+        host="0.0.0.0", 
+        port=8000, 
+        reload=False, 
+        timeout_keep_alive=30 
+    )

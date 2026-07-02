@@ -87,7 +87,7 @@ DEVICE_NAME=pe-br python telemetry_agent.py
 Launch your NOC interface to monitor live alerts and trace persistent incidents:
 
 ```bash
-streamlit run Dashboard/Dashboard.py
+streamlit run Dashboard/app.py
 
 ```
 
