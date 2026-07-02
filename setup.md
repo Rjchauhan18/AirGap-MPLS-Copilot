@@ -42,9 +42,9 @@ chmod +x setup.sh
 **What the setup script manages automatically:**
 
 1. Generates local storage directories (`output/incidents/`, `Model/`, `ai_stack/`).
-2. Pulls open-source weights down locally (`Phi-3-mini` LLM & `all-MiniLM-L6-v2` embeddings).
-3. Spins up isolated Docker service hooks for Qdrant Vector DB and Ollama.
-4. Compiles your custom model definitions directly into the local Ollama server registry.
+2. Initializes local model weights and dependencies (`Phi-3-mini LLM`, `all-MiniLM-L6-v2` & `BM25 embeddings`, and `Tiktoken tokenizer`) within the `ai_stack/models` directory.
+3. Spins up isolated `Docker service` hooks for `Qdrant Vector DB` and `Ollama`.
+4. Compiles your `custom model` definitions directly into the local Ollama server registry.
 
 ---
 
@@ -68,8 +68,7 @@ chmod +x network_simulation.sh
 Boot up the central processing backend orchestrator:
 
 ```bash
-uvicorn api.app:app --reload --port 8000
-
+python -m api.app
 ```
 
 ### 3. Launch the High-Frequency Telemetry Agent
@@ -80,8 +79,7 @@ Initialize the data streaming pipeline loop to pass metrics back into the API co
 DEVICE_NAME=pe-br python telemetry_agent.py
 
 ```
-`NOTE`: you can use any of this as `DEVICE_NAME` that are withing network simulation `edge-dc`,`p-core`,`pe-br`,`pe-dc`
-
+`NOTE`: You can use any of the following for `DEVICE_NAME` (based on network simulation nodes): `edge-br`, `edge-dc`, `edge-hub`, `p-core`, `pe-br`, `pe-dc`, `pe-hub`.
 ### 4. Open the Streamlit UI
 
 Launch your NOC interface to monitor live alerts and trace persistent incidents:
@@ -154,4 +152,16 @@ sudo containerlab destroy --topo sdwan-mpls.clab.yml
 # Stop and power down background AI stack services
 docker compose -f docker-compose.ai.yml down
 
+```
+
+## Comman issues
+
+1. `Config` folder permission related issue use the following command.
+```Bash
+sudo chown -R $USER:$USER config
+```
+
+2. `logs` folder permission related issue use the following command.
+```Bash
+sudo chmod -R 777 logs/
 ```

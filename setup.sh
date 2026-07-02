@@ -26,18 +26,47 @@ echo "Downloading Embedding Model (all-MiniLM-L6-v2)..."
 cat << 'EOF' > scripts/download_embeddings_tmp.py
 import os
 from pathlib import Path
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer   
+from fastembed import SparseTextEmbedding
+import tiktoken
 
+# Define base paths
 BASE = Path(__file__).resolve().parent.parent
-EMBED_DIR = BASE / "ai_stack" / "models" / "embeddings" / "all-MiniLM-L6-v2"
-EMBED_DIR.mkdir(parents=True, exist_ok=True)
+MODELS_DIR = BASE / "ai_stack" / "models"
+EMBED_DIR = MODELS_DIR / "embeddings" / "all-MiniLM-L6-v2"
+FASTEMBED_CACHE_DIR = MODELS_DIR / "embeddings" / "fastembed_cache"
+TIKTOKEN_DIR = MODELS_DIR / "tiktoken_cache"
 
-print(f"Saving embedding model to: {EMBED_DIR}")
-embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-embed_model.save(str(EMBED_DIR))
+# Create directories
+EMBED_DIR.mkdir(parents=True, exist_ok=True)
+FASTEMBED_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+TIKTOKEN_DIR.mkdir(parents=True, exist_ok=True)
+
+# 1. Download SentenceTransformer (Dense)
+print(f"Downloading all-MiniLM-L6-v2 to {EMBED_DIR}...")
+model = SentenceTransformer("all-MiniLM-L6-v2")
+model.save(str(EMBED_DIR))
+print("✅ Dense model saved.")
+
+# 2. Download FastEmbed (Sparse)
+print(f"Downloading Qdrant/bm25 to {FASTEMBED_CACHE_DIR}...")
+# Setting cache_dir here forces it to download to your local folder
+bm25 = SparseTextEmbedding(model_name="Qdrant/bm25", cache_dir=str(FASTEMBED_CACHE_DIR))
+print("✅ Sparse model saved.")
+
+# 3. Download Tiktoken
+print(f"Downloading Tiktoken to {TIKTOKEN_DIR}...")
+os.environ["TIKTOKEN_CACHE_DIR"] = str(TIKTOKEN_DIR)
+_ = tiktoken.get_encoding("cl100k_base")
+print("✅ Tiktoken saved.")
 EOF
+
+# Execution blocks here and waits until the Python process finishes fully
 python scripts/download_embeddings_tmp.py
-rm scripts/download_embeddings_tmp.py
+
+# Cleanup happens only after python successfully finishes downloading
+rm -f scripts/download_embeddings_tmp.py
+echo "Temporary setup download script cleaned up safely."
 
 echo "[3/7] Starting Docker Services (Ollama & Qdrant)..."
 if ! docker info >/dev/null 2>&1; then
